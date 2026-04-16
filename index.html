@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulateur de Portefeuille</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Syne:wght@500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface2: #21262d;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text2: #7d8590;
+  --text3: #484f58;
+  --accent: #58a6ff;
+  --green: #3fb950;
+  --red: #f85149;
+  --gold: #e3b341;
+  --r: 8px;
+  --mono: 'IBM Plex Mono', monospace;
+  --display: 'Syne', sans-serif;
+  --header-h: 57px;
+  --tabs-h: 45px;
+  --top: 102px;
+}
+[data-theme="light"] {
+  --bg: #f6f8fa;
+  --surface: #ffffff;
+  --surface2: #f0f4f8;
+  --border: #d0d7de;
+  --text: #1f2328;
+  --text2: #636c76;
+  --text3: #afb8c1;
+  --accent: #0969da;
+  --green: #1a7f37;
+  --red: #cf222e;
+  --gold: #9a6700;
+}
+
+body { font-family: var(--mono); background: var(--bg); color: var(--text); min-height: 100vh; font-size: 13px; line-height: 1.5; }
+
+/* ── HEADER ─────────────────────────────── */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; height: var(--header-h);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky; top: 0; z-index: 200;
+}
+.logo {
+  font-family: var(--display); font-size: 17px; font-weight: 800;
+  letter-spacing: -0.5px; color: var(--text);
+  display: flex; align-items: center; gap: 10px;
+}
+.logo-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+
+.btn {
+  padding: 6px 14px; border-radius: 20px; font-family: var(--mono);
+  font-size: 11px; cursor: pointer; transition: all .15s;
+  border: 1px solid var(--border); background: var(--surface2); color: var(--text2);
+}
+.btn:hover { border-color: var(--accent); color: var(--text); }
+
+/* ── TABS ───────────────────────────────── */
+.tabs {
+  display: flex; height: var(--tabs-h);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface); padding: 0 24px;
+  position: sticky; top: var(--header-h); z-index: 199;
+}
+.tab {
+  display: flex; align-items: center; padding: 0 20px;
+  font-size: 11px; font-weight: 500; color: var(--text2); cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: all .15s; letter-spacing: .5px; text-transform: uppercase;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── LAYOUT ─────────────────────────────── */
+.layout {
+  display: grid; grid-template-columns: 300px 1fr;
+  min-height: calc(100vh - var(--top));
+}
+.sidebar {
+  border-right: 1px solid var(--border); padding: 24px;
+  background: var(--surface);
+  position: sticky; top: var(--top); height: calc(100vh - var(--top));
+  overflow-y: auto;
+}
+.results { padding: 24px; overflow-y: auto; }
+
+/* ── SIDEBAR PARAMS ─────────────────────── */
+.params-group { margin-bottom: 28px; }
+.params-group-title {
+  font-family: var(--display); font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1.2px; color: var(--text3);
+  margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+}
+.param { margin-bottom: 14px; }
+.param-label {
+  font-size: 10px; color: var(--text2); margin-bottom: 5px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.param-val { color: var(--accent); font-weight: 600; font-size: 11px; }
+.param-hint { color: var(--text3); font-size: 10px; }
+input[type=number], input[type=date] {
+  width: 100%; background: var(--surface2);
+  border: 1px solid var(--border); border-radius: var(--r);
+  padding: 8px 10px; color: var(--text); font-family: var(--mono); font-size: 12px;
+  outline: none; transition: border-color .15s;
+  -moz-appearance: textfield;
+}
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+input[type=number]:focus, input[type=date]:focus { border-color: var(--accent); }
+
+.toggle-row { display: flex; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--r); padding: 3px; gap: 3px; }
+.toggle-btn {
+  flex: 1; padding: 6px; font-family: var(--mono); font-size: 11px;
+  border: none; border-radius: 5px; cursor: pointer;
+  background: transparent; color: var(--text2); transition: all .15s;
+}
+.toggle-btn.active { background: var(--accent); color: #fff; font-weight: 500; }
+
+/* ── KPI GRID ───────────────────────────── */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 18px 20px; }
+.kpi-label { font-size: 10px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+.kpi-value { font-size: 22px; font-weight: 600; color: var(--text); letter-spacing: -.5px; line-height: 1.2; }
+.kpi-value.blue { color: var(--accent); }
+.kpi-value.green { color: var(--green); }
+.kpi-value.gold { color: var(--gold); }
+.kpi-value.red { color: var(--red); }
+.kpi-sub { font-size: 10px; color: var(--text3); margin-top: 4px; }
+
+/* ── MILESTONE BANNER ───────────────────── */
+.milestone-banner {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--surface); border: 1px solid var(--gold);
+  border-radius: var(--r); padding: 14px 18px; margin-bottom: 20px;
+}
+.milestone-banner.miss { border-color: var(--border); }
+.ms-icon { font-size: 22px; flex-shrink: 0; }
+.ms-title { font-family: var(--display); font-size: 13px; font-weight: 700; color: var(--gold); margin-bottom: 2px; }
+.ms-title.miss { color: var(--text2); }
+.ms-detail { font-size: 11px; color: var(--text2); line-height: 1.6; }
+
+/* ── CHART ──────────────────────────────── */
+.chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 20px; margin-bottom: 20px; }
+.card-title { font-size: 10px; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; font-weight: 600; }
+.chart-wrap { position: relative; height: 280px; }
+
+/* ── TABLE ──────────────────────────────── */
+.table-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; margin-bottom: 20px; }
+.table-card .card-title { padding: 14px 18px 14px; border-bottom: 1px solid var(--border); margin: 0; }
+.table-scroll { overflow-x: auto; max-height: 520px; overflow-y: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+thead th {
+  padding: 8px 14px; text-align: right; white-space: nowrap;
+  color: var(--text3); font-weight: 500; font-size: 10px;
+  text-transform: uppercase; letter-spacing: .5px;
+  background: var(--surface2); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 1;
+}
+thead th:first-child { text-align: left; }
+td { padding: 8px 14px; text-align: right; border-bottom: 1px solid var(--border); color: var(--text); white-space: nowrap; }
+td:first-child { text-align: left; color: var(--text2); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--surface2); }
+tr.ms-row td { background: rgba(227,179,65,.07); }
+tr.ms-row td:first-child { color: var(--gold); font-weight: 600; }
+tr.exhausted td { background: rgba(248,81,73,.07); }
+td.blue { color: var(--accent); }
+td.green { color: var(--green); }
+td.red { color: var(--red); }
+td.gold { color: var(--gold); }
+td.bold { font-weight: 600; }
+
+/* ── TAB CONTENT ────────────────────────── */
+.pane { display: none; }
+.pane.active { display: block; }
+
+/* ── SCROLLBAR ──────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── RESPONSIVE ─────────────────────────── */
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+}
+
+/* ── INFO BOX ───────────────────────────── */
+.info-box {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 12px 14px; margin-bottom: 20px;
+  font-size: 11px; color: var(--text2); line-height: 1.7;
+}
+.info-box strong { color: var(--text); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><div class="logo-dot"></div>Simulateur de Portefeuille</div>
+  <button class="btn" id="themeBtn">☀ Thème clair</button>
+</header>
+
+<div class="tabs">
+  <div class="tab active" data-tab="invest">Investissement</div>
+  <div class="tab" data-tab="pension">Pension</div>
+</div>
+
+<div class="layout">
+
+  <!-- ══ SIDEBAR ══════════════════════════════════════════════ -->
+  <aside class="sidebar">
+
+    <!-- Investment params -->
+    <div class="pane active" id="sInvest">
+      <div class="params-group">
+        <div class="params-group-title">Paramètres</div>
+
+        <div class="param">
+          <div class="param-label">Taux annuel <span class="param-val" id="rateVal">7.0 %</span></div>
+          <input type="number" id="rate" value="7" min="0" max="50" step="0.1">
+        </div>
+        <div class="param">
+          <div class="param-label">Montant initial (€)</div>
+          <input type="number" id="initial" value="10000" min="0" step="500">
+        </div>
+        <div class="param">
+          <div class="param-label">Versement mensuel (€)</div>
+          <input type="number" id="monthly" value="500" min="0" step="50">
+        </div>
+        <div class="param">
+          <div class="param-label">Durée (années)</div>
+          <input type="number" id="duration" value="30" min="1" max="70" step="1">
+        </div>
+        <div class="param">
+          <div class="param-label">Date de début</div>
+          <input type="date" id="startDate">
+        </div>
+      </div>
+
+      <div class="params-group">
+        <div class="params-group-title">Affichage tableau</div>
+        <div class="toggle-row">
+          <button class="toggle-btn active" data-view="yearly">Annuel</button>
+          <button class="toggle-btn" data-view="monthly">Mensuel</button>
+        </div>
+      </div>
+
+      <div class="params-group">
+        <div class="params-group-title">Palier cible</div>
+        <div class="param">
+          <div class="param-label">Montant (€)</div>
+          <input type="number" id="milestone" value="500000" min="0" step="10000">
+        </div>
+      </div>
+    </div>
+
+    <!-- Pension params -->
+    <div class="pane" id="sPension">
+      <div class="params-group">
+        <div class="params-group-title">Paramètres pension</div>
+
+        <div class="param">
+          <div class="param-label">Capital de départ (€) <span class="param-hint">↓ auto</span></div>
+          <input type="number" id="pCapital" value="500000" min="0" step="10000">
+        </div>
+        <div class="param">
+          <div class="param-label">Base de coût (€) <span class="param-hint">↓ auto</span></div>
+          <input type="number" id="pBasis" value="180000" min="0" step="10000">
+        </div>
+        <div class="param">
+          <div class="param-label">Taux annuel <span class="param-val" id="pRateVal">7.0 %</span></div>
+          <input type="number" id="pRate" value="7" min="0" max="50" step="0.1">
+        </div>
+        <div class="param">
+          <div class="param-label">Retrait annuel brut (€)</div>
+          <input type="number" id="spending" value="36000" min="0" step="1000">
+        </div>
+        <div class="param">
+          <div class="param-label">Date de début pension</div>
+          <input type="date" id="pStartDate">
+        </div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ══ RESULTS ═══════════════════════════════════════════════ -->
+  <main class="results">
+
+    <!-- Investment results -->
+    <div class="pane active" id="rInvest">
+      <div class="kpi-grid" id="invKpis"></div>
+      <div id="msCard"></div>
+      <div class="chart-card">
+        <div class="card-title">Évolution du portefeuille</div>
+        <div class="chart-wrap"><canvas id="invChart"></canvas></div>
+      </div>
+      <div class="table-card">
+        <div class="card-title">Détail par période</div>
+        <div class="table-scroll" id="invTable"></div>
+      </div>
+    </div>
+
+    <!-- Pension results -->
+    <div class="pane" id="rPension">
+      <div class="info-box">
+        <strong>Fiscalité à la sortie :</strong> TOB 0,12 % sur chaque retrait · 10 % sur les plus-values au-delà de <strong>10 000 €</strong> de gains par an.
+        Le retrait brut renseigné correspond au montant prélevé sur le portefeuille ; le net reçu est après impôts.
+      </div>
+      <div class="kpi-grid" id="penKpis"></div>
+      <div class="chart-card">
+        <div class="card-title">Évolution du capital en phase pension</div>
+        <div class="chart-wrap"><canvas id="penChart"></canvas></div>
+      </div>
+      <div class="table-card">
+        <div class="card-title">Détail annuel</div>
+        <div class="table-scroll" id="penTable"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+/* ════════════════════════════════════════
+   STATE
+════════════════════════════════════════ */
+const S = { theme: 'dark', view: 'yearly', tab: 'invest' };
+let chartInv = null, chartPen = null;
+
+/* ════════════════════════════════════════
+   FORMATTERS
+════════════════════════════════════════ */
+const fmt = (n, d=0) => isNaN(n) || n===null ? '—'
+  : new Intl.NumberFormat('fr-BE', { minimumFractionDigits: d, maximumFractionDigits: d }).format(n);
+const eur = (n, d=2) => fmt(n,d) + ' €';
+const pct = n => fmt(n,2) + ' %';
+
+function addMonths(dateStr, n) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  d.setMonth(d.getMonth() + n);
+  return d.toLocaleDateString('fr-BE', { month: 'short', year: 'numeric' });
+}
+
+/* ════════════════════════════════════════
+   CALCULATIONS
+════════════════════════════════════════ */
+const TOB = 0.0012;
+
+function calcInvestment() {
+  const rate      = (parseFloat(v('rate')) || 0) / 100;
+  const mr        = rate / 12;
+  const initial   = parseFloat(v('initial'))  || 0;
+  const monthly   = parseFloat(v('monthly'))  || 0;
+  const months    = (parseInt(v('duration')) || 1) * 12;
+
+  const rows = [];
+  let bal  = initial * (1 - TOB);
+  let inv  = bal;
+  let gInv = initial; // gross invested
+
+  rows.push({ month: 0, bal, inv, gains: 0, pInv: bal, pInt: 0 });
+
+  for (let m = 1; m <= months; m++) {
+    const interest = bal * mr;
+    const netC     = monthly * (1 - TOB);
+    bal = bal + interest + netC;
+    inv += netC;
+    gInv += monthly;
+    rows.push({ month: m, bal, inv, gains: bal - inv, pInv: netC, pInt: interest });
+  }
+  return rows;
+}
+
+function toYearly(monthly) {
+  const out = [], n = monthly.length - 1;
+  for (let y = 1; y * 12 <= n + 11; y++) {
+    const ei = Math.min(y * 12, n);
+    const si = (y - 1) * 12;
+    const e  = monthly[ei], s = monthly[si];
+    out.push({
+      period: y,
+      label:  `Année ${y}`,
+      bal:    e.bal,
+      inv:    e.inv,
+      gains:  e.gains,
+      pInv:   e.inv - s.inv,
+      pInt:   e.gains - s.gains,
+    });
+    if (ei === n) break;
+  }
+  return out;
+}
+
+function findMilestone(rows, target) {
+  if (!target || target <= 0) return null;
+  for (const r of rows) {
+    if (r.bal >= target) {
+      const startDate = v('startDate');
+      const dateStr   = startDate ? addMonths(startDate, r.month) : null;
+      return {
+        month: r.month,
+        years: Math.floor(r.month / 12),
+        months: r.month % 12,
+        bal: r.bal,
+        date: dateStr,
+      };
+    }
+  }
+  return null;
+}
+
+function calcPension() {
+  const cap     = parseFloat(v('pCapital')) || 0;
+  const basis0  = parseFloat(v('pBasis'))   || 0;
+  const rate    = (parseFloat(v('pRate'))   || 0) / 100;
+  const spend   = parseFloat(v('spending')) || 0;
+  const GTAX    = 0.10;
+  const EXEMPT  = 10000;
+
+  const rows = [];
+  let bal   = cap;
+  let basis = Math.min(basis0, cap);
+
+  rows.push({ yr: 0, bal, basis, gains: bal - basis, withdrawal: 0, tob: 0, gtax: 0, net: 0, gInW: 0 });
+
+  for (let y = 1; y <= 100 && bal > 0.01; y++) {
+    const balWithInterest = bal * (1 + rate);
+    const withdrawal = Math.min(spend, balWithInterest);
+    const gainsTotal = Math.max(0, balWithInterest - basis);
+    const gainRatio  = balWithInterest > 0 ? gainsTotal / balWithInterest : 0;
+    const gInW       = withdrawal * gainRatio;
+    const costInW    = withdrawal - gInW;
+    const tob        = withdrawal * TOB;
+    const taxable    = Math.max(0, gInW - EXEMPT);
+    const gtax       = taxable * GTAX;
+    const net        = withdrawal - tob - gtax;
+
+    bal   = balWithInterest - withdrawal;
+    basis = Math.max(0, basis - costInW);
+
+    rows.push({ yr: y, bal: Math.max(0, bal), basis, gains: Math.max(0, bal - basis), withdrawal, tob, gtax, net, gInW });
+  }
+  return rows;
+}
+
+/* ════════════════════════════════════════
+   CHART HELPERS
+════════════════════════════════════════ */
+function chartColors() {
+  const dk = S.theme === 'dark';
+  return {
+    grid:    dk ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+    tick:    dk ? '#7d8590' : '#636c76',
+    accent:  dk ? '#58a6ff' : '#0969da',
+    green:   dk ? '#3fb950' : '#1a7f37',
+    tooltip: {
+      bg:     dk ? '#1c2128' : '#ffffff',
+      title:  dk ? '#e6edf3' : '#1f2328',
+      body:   dk ? '#7d8590' : '#636c76',
+      border: dk ? '#30363d' : '#d0d7de',
+    }
+  };
+}
+
+function baseChartOpts(c) {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { labels: { color: c.tick, font: { family: 'IBM Plex Mono', size: 11 }, boxWidth: 12, padding: 16 } },
+      tooltip: {
+        backgroundColor: c.tooltip.bg, titleColor: c.tooltip.title,
+        bodyColor: c.tooltip.body, borderColor: c.tooltip.border, borderWidth: 1,
+        padding: 10,
+        callbacks: { label: ctx => `  ${ctx.dataset.label}: ${eur(ctx.raw)}` }
+      }
+    },
+    scales: {
+      x: { grid: { color: c.grid }, ticks: { color: c.tick, font: { family: 'IBM Plex Mono', size: 10 }, maxTicksLimit: 14 } },
+      y: { grid: { color: c.grid }, ticks: { color: c.tick, font: { family: 'IBM Plex Mono', size: 10 }, callback: n => n >= 1e6 ? fmt(n/1e6,1)+'M€' : fmt(n/1000)+'k€' } }
+    }
+  };
+}
+
+/* ════════════════════════════════════════
+   RENDER INVESTMENT
+════════════════════════════════════════ */
+function renderInvestment() {
+  const monthly = calcInvestment();
+  const last    = monthly[monthly.length - 1];
+  const dur     = parseInt(v('duration')) || 1;
+  const startD  = v('startDate');
+  const msTarget= parseFloat(v('milestone')) || 0;
+  const ms      = findMilestone(monthly, msTarget);
+
+  // Sync pension side
+  el('pCapital').value = Math.round(last.bal);
+  el('pBasis').value   = Math.round(last.inv);
+
+  // Gross invested
+  const grossInv   = (parseFloat(v('initial'))||0) + (parseFloat(v('monthly'))||0) * dur * 12;
+  const tobTotal   = grossInv * TOB;
+  const roi        = last.inv > 0 ? (last.gains / last.inv) * 100 : 0;
+
+  // KPIs
+  el('invKpis').innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-label">Valeur finale</div>
+      <div class="kpi-value">${eur(last.bal)}</div>
+      <div class="kpi-sub">Après ${dur} an${dur>1?'s':''}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Total investi net TOB</div>
+      <div class="kpi-value blue">${eur(last.inv)}</div>
+      <div class="kpi-sub">TOB cumulé : ${eur(tobTotal)}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Plus-values totales</div>
+      <div class="kpi-value green">${eur(last.gains)}</div>
+      <div class="kpi-sub">ROI : ${pct(roi)}</div>
+    </div>`;
+
+  // Milestone
+  if (msTarget > 0) {
+    if (ms) {
+      const dateInfo = ms.date ? ` · <em>${ms.date}</em>` : '';
+      el('msCard').innerHTML = `<div class="milestone-banner">
+        <div class="ms-icon">🏆</div>
+        <div>
+          <div class="ms-title">Palier de ${eur(msTarget)} atteint !</div>
+          <div class="ms-detail">
+            En <strong>${ms.years} an${ms.years!==1?'s':''} et ${ms.months} mois</strong> (mois ${ms.month})${dateInfo}
+            — Capital à ce moment : <strong>${eur(ms.bal)}</strong>
+          </div>
+        </div>
+      </div>`;
+    } else {
+      el('msCard').innerHTML = `<div class="milestone-banner miss">
+        <div class="ms-icon">🎯</div>
+        <div>
+          <div class="ms-title miss">Palier de ${eur(msTarget)} non atteint</div>
+          <div class="ms-detail">Capital final : ${eur(last.bal)} — Augmentez la durée ou les versements</div>
+        </div>
+      </div>`;
+    }
+  } else { el('msCard').innerHTML = ''; }
+
+  // Chart data
+  const c = chartColors();
+  let labels, dInv, dTot;
+
+  if (S.view === 'yearly') {
+    const yr  = toYearly(monthly);
+    labels    = ['J0', ...yr.map(r => startD ? addMonths(startD, r.period*12) : `A${r.period}`)];
+    dInv      = [monthly[0].inv, ...yr.map(r => r.inv)];
+    dTot      = [monthly[0].bal, ...yr.map(r => r.bal)];
+  } else {
+    const step = monthly.length > 600 ? 6 : monthly.length > 300 ? 3 : 1;
+    const samp = monthly.filter((_,i) => i % step === 0);
+    labels = samp.map(r => startD ? addMonths(startD, r.month) : `M${r.month}`);
+    dInv   = samp.map(r => r.inv);
+    dTot   = samp.map(r => r.bal);
+  }
+
+  if (chartInv) chartInv.destroy();
+  chartInv = new Chart(el('invChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Montant investi', data: dInv, borderColor: c.accent,
+          backgroundColor: S.theme==='dark' ? 'rgba(88,166,255,0.18)' : 'rgba(9,105,218,0.12)',
+          fill: 'origin', borderWidth: 2, pointRadius: 0, tension: 0.3 },
+        { label: 'Valeur totale', data: dTot, borderColor: c.green,
+          backgroundColor: S.theme==='dark' ? 'rgba(63,185,80,0.18)' : 'rgba(26,127,55,0.12)',
+          fill: '-1', borderWidth: 2, pointRadius: 0, tension: 0.3 },
+      ]
+    },
+    options: baseChartOpts(c),
+  });
+
+  // Table
+  const rows = S.view === 'yearly' ? toYearly(monthly) : monthly.slice(1).map(r => ({
+    period: r.month, label: startD ? `Mois ${r.month} (${addMonths(startD,r.month)})` : `Mois ${r.month}`,
+    bal: r.bal, inv: r.inv, gains: r.gains, pInv: r.pInv, pInt: r.pInt
+  }));
+
+  const msPeriod = ms ? (S.view === 'yearly' ? Math.ceil(ms.month / 12) : ms.month) : -1;
+
+  let html = `<table><thead><tr>
+    <th>Période</th>
+    <th>Investi (période)</th><th>Investi (cumulé)</th>
+    <th>Intérêts (période)</th><th>Intérêts (cumulés)</th>
+    <th>Total</th>
+  </tr></thead><tbody>`;
+
+  rows.forEach(r => {
+    const iMs = r.period === msPeriod;
+    const labelFull = (S.view === 'yearly' && startD)
+      ? `Année ${r.period} (${addMonths(startD, r.period*12)})`
+      : r.label;
+    html += `<tr class="${iMs ? 'ms-row' : ''}">
+      <td>${labelFull}${iMs ? ' 🏆' : ''}</td>
+      <td class="blue">${eur(r.pInv)}</td>
+      <td class="blue">${eur(r.inv)}</td>
+      <td class="green">${eur(r.pInt)}</td>
+      <td class="green">${eur(r.gains)}</td>
+      <td class="bold">${eur(r.bal)}</td>
+    </tr>`;
+  });
+
+  el('invTable').innerHTML = html + '</tbody></table>';
+}
+
+/* ════════════════════════════════════════
+   RENDER PENSION
+════════════════════════════════════════ */
+function renderPension() {
+  const rows    = calcPension();
+  const last    = rows[rows.length - 1];
+  const pStart  = v('pStartDate');
+  const spent   = parseFloat(v('spending')) || 0;
+  const exh     = last.bal <= 0.01;
+  const avgNet  = rows.length > 1
+    ? rows.slice(1).reduce((s,r) => s + r.net, 0) / (rows.length - 1) : 0;
+
+  // KPIs
+  el('penKpis').innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-label">Durée du capital</div>
+      <div class="kpi-value ${exh ? 'green' : 'gold'}">${last.yr} ans</div>
+      <div class="kpi-sub">${exh ? 'Capital épuisé' : 'Capital restant : '+eur(last.bal)}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Capital initial</div>
+      <div class="kpi-value blue">${eur(parseFloat(v('pCapital')))}</div>
+      <div class="kpi-sub">Base coût : ${eur(parseFloat(v('pBasis')))}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Retrait brut / an</div>
+      <div class="kpi-value">${eur(spent)}</div>
+      <div class="kpi-sub">Net moyen reçu : ${eur(avgNet)}/an</div>
+    </div>`;
+
+  // Chart
+  const c = chartColors();
+  const labels  = rows.map(r => pStart ? addMonths(pStart, r.yr*12) : `Année ${r.yr}`);
+  const dBal    = rows.map(r => r.bal);
+  const dBasis  = rows.map(r => r.basis);
+
+  if (chartPen) chartPen.destroy();
+  chartPen = new Chart(el('penChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Capital restant', data: dBal, borderColor: c.accent,
+          backgroundColor: S.theme==='dark' ? 'rgba(88,166,255,0.15)' : 'rgba(9,105,218,0.10)',
+          fill: 'origin', borderWidth: 2, pointRadius: 0, tension: 0.3 },
+        { label: 'Base de coût', data: dBasis, borderColor: c.green,
+          borderWidth: 1.5, borderDash: [5,4], pointRadius: 0, fill: false, tension: 0.3 },
+      ]
+    },
+    options: baseChartOpts(c),
+  });
+
+  // Table
+  let html = `<table><thead><tr>
+    <th>Année</th>
+    <th>Capital début</th><th>Retrait brut</th>
+    <th>TOB (0,12 %)</th><th>PV imposable</th><th>Taxe PV (10 %)</th>
+    <th>Net reçu</th><th>Capital fin</th>
+  </tr></thead><tbody>`;
+
+  rows.forEach((r, i) => {
+    if (i === 0) return;
+    const startBal = rows[i-1].bal;
+    const yearLabel = pStart ? `Année ${r.yr} (${addMonths(pStart, (r.yr-1)*12)})` : `Année ${r.yr}`;
+    const isExh = r.bal <= 0.01;
+    const taxablePV = Math.max(0, r.gInW - 10000);
+    html += `<tr class="${isExh ? 'exhausted' : ''}">
+      <td>${yearLabel}</td>
+      <td class="blue">${eur(startBal)}</td>
+      <td>${eur(r.withdrawal)}</td>
+      <td class="red">${eur(r.tob)}</td>
+      <td>${eur(taxablePV)}</td>
+      <td class="red">${eur(r.gtax)}</td>
+      <td class="green">${eur(r.net)}</td>
+      <td class="${isExh ? 'red' : ''} bold">${eur(r.bal)}</td>
+    </tr>`;
+  });
+
+  el('penTable').innerHTML = html + '</tbody></table>';
+}
+
+/* ════════════════════════════════════════
+   HELPERS
+════════════════════════════════════════ */
+const el = id => document.getElementById(id);
+const v  = id => el(id).value;
+
+/* ════════════════════════════════════════
+   EVENTS
+════════════════════════════════════════ */
+function setup() {
+  // Theme
+  el('themeBtn').addEventListener('click', () => {
+    S.theme = S.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', S.theme);
+    el('themeBtn').textContent = S.theme === 'dark' ? '☀ Thème clair' : '🌙 Thème sombre';
+    renderAll();
+  });
+
+  // Tabs
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+      S.tab = t.dataset.tab;
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      ['sInvest','sPension'].forEach(id => el(id).classList.remove('active'));
+      ['rInvest','rPension'].forEach(id => el(id).classList.remove('active'));
+      if (S.tab === 'invest') {
+        el('sInvest').classList.add('active');
+        el('rInvest').classList.add('active');
+        renderInvestment();
+      } else {
+        el('sPension').classList.add('active');
+        el('rPension').classList.add('active');
+        renderPension();
+      }
+    });
+  });
+
+  // View toggle
+  document.querySelectorAll('.toggle-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      S.view = b.dataset.view;
+      document.querySelectorAll('.toggle-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      renderInvestment();
+    });
+  });
+
+  // Rate display + pension rate sync
+  el('rate').addEventListener('input', () => {
+    el('rateVal').textContent = parseFloat(el('rate').value).toFixed(1) + ' %';
+    el('pRate').value = el('rate').value;
+    el('pRateVal').textContent = parseFloat(el('rate').value).toFixed(1) + ' %';
+  });
+  el('pRate').addEventListener('input', () => {
+    el('pRateVal').textContent = parseFloat(el('pRate').value).toFixed(1) + ' %';
+  });
+
+  // Investment inputs
+  ['rate','initial','monthly','duration','startDate','milestone'].forEach(id => {
+    el(id).addEventListener('input', renderInvestment);
+  });
+
+  // Pension inputs
+  ['pCapital','pBasis','pRate','spending','pStartDate'].forEach(id => {
+    el(id).addEventListener('input', renderPension);
+  });
+}
+
+function renderAll() {
+  renderInvestment();
+  renderPension();
+}
+
+/* ════════════════════════════════════════
+   INIT
+════════════════════════════════════════ */
+function init() {
+  const today = new Date().toISOString().split('T')[0];
+  el('startDate').value  = today;
+  el('pStartDate').value = today;
+  setup();
+  renderAll();
+}
+
+init();
+</script>
+</body>
+</html>
